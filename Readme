@@ -1,0 +1,58 @@
+*******> nfe_advance.patch
+
+ Author: Feng Pan (fpan3@ncsu.edu)
+
+ Date: Dec. 6, 2016
+
+ Programs: sander, pmemd, pmemd.cuda
+
+ Description: a) Add the &pmd and &bbmd module to PMEMD
+              b) Extend &pmd so that CV can be restrained in a specific range
+              
+###############################################################################################################
+###########################################   I N S T A L L  ##################################################
+###############################################################################################################
+Here is the instruction to apply the patch:
+
+nfe_advance.patch is the patch for Amber16 (AmberTools 16.20, Amber 16.06 tested)
+
+please make sure you have the correct $AMBERHOME set and the required version updated before applying the patch
+
+To apply the patch, just go to $AMBERHOME and run the command
+
+./update_amber --apply-patch=PATH-TO-FILE/nfe_advance.patch
+
+you can also easily reverse the patch by
+
+./update_amber --reverse-patch=.patches/ThirdParty16_Applied_Patches/nfe_advance.patch
+
+Once you have the patch applied, you need to recompile to make the changes effective
+
+****************************************************************************************************************
+
+###############################################################################################################
+#############################################   U S A G E  ####################################################
+###############################################################################################################
+
+For the details of &pmd and &bbmd, check nfe.pdf.
+
+For &pmd, now anchor_strength & anchor_position have new definitions:
+
+  anchor_position = r1,r2,r3,r4 (must have four elements)
+  anchor_strength = k1,k2       (must have two elements and be non-negative)
+  
+the restraint is a well with a square bottom with parabolic sidesout to a defined distance, and then linear sides
+beyond that. If R is the value of the restraint, E is the restraint potential
+
+  E = k1*(r1-r2)*R      (R<=r1)
+  E = 0.5*k1*(R-r2)**2  (r1<R<=r2)
+  E = 0                 (r2<R<=r3)
+  E = 0.5*k2*(R-r3)**2  (r3<R<=r4)
+  E = k2*(r4-r3)*R      (R>r4)
+
+Ex1: if r2=r3, r1<<r2 and r4>>r3, E equals the traditional harmonic potential.
+Ex2: if r1 is slightly less than r2 and r4 is slightly larger than r3, also with very large k1,k2, the CV is
+     restrained in the range (r2,r3) with no potential added.
+     
+****************************************************************************************************************
+contact fpan3@ncsu.edu for any questions.
