@@ -2,12 +2,13 @@
 
  Author: Feng Pan
 
- Date: Dec. 6, 2016
+ Date: Dec. 28, 2016
 
  Programs: sander, pmemd
 
  Description: a) Add the &pmd and &bbmd module to PMEMD
               b) Extend &pmd so that CV can be restrained in a specific range
+	      c) fix the bug when running with NPT ensemble
 
  --------------------------------------------------------------------------------
  AmberTools/src/sander/nfe-colvar-type.F90 |    3 +-
@@ -15,13 +16,15 @@
  AmberTools/src/sander/nfe-pmd-hooks.F90   |   97 +-
  src/pmemd/src/Makefile                    |    2 +-
  src/pmemd/src/f90depends                  |   15 +
+ src/pmemd/src/gb_force.F90                |   14 +-
  src/pmemd/src/nfe_bbmd.F90                | 2626 +++++++++++++++++++++++++++++
  src/pmemd/src/nfe_colvar.F90              |    7 +-
  src/pmemd/src/nfe_lib.F90                 |    2 +
  src/pmemd/src/nfe_pmd.F90                 |  620 +++++++
  src/pmemd/src/nfe_setup.F90               |   77 +-
+ src/pmemd/src/pme_force.F90               |   28 +-
  src/pmemd/src/runmd.F90                   |   18 +-
- 11 files changed, 3388 insertions(+), 83 deletions(-)
+ 13 files changed, 3409 insertions(+), 104 deletions(-)
 
 diff --git AmberTools/src/sander/nfe-colvar-type.F90 AmberTools/src/sander/nfe-colvar-type.F90
 index 4e47f03..e0f8ce4 100644
@@ -273,6 +276,37 @@ index 33b92e0..2d9bfa2 100644
  runmd$(OSFX): copyright.i
  runmin$(OSFX): prmtop_dat$(OSFX)
  runmin$(OSFX): constraints$(OSFX)
+diff --git src/pmemd/src/gb_force.F90 src/pmemd/src/gb_force.F90
+index d28aca7..df7b1a4 100644
+--- src/pmemd/src/gb_force.F90
++++ src/pmemd/src/gb_force.F90
+@@ -339,19 +339,19 @@ subroutine gb_force(atm_cnt, crd, frc, pot_ene, irespa, need_pot_ene)
+ !-------------------------------------
+ if (infe.gt.0) then
+   if (nfe_init.eq.1) then
+-  call gpu_download_frc(frc)
++  !call gpu_download_frc(frc)
+   call gpu_download_crd(crd)
+ 
+   bias_frc(:,:) = 0.d0
+   call nfe_on_force(crd,bias_frc)
+ 
+-  do i = 1, atm_cnt
+-     frc(1, i) = frc(1,i)+bias_frc(1, i)
+-     frc(2, i) = frc(2,i)+bias_frc(2, i)
+-     frc(3, i) = frc(3,i)+bias_frc(3, i)
+-  end do
++  !do i = 1, atm_cnt
++  !   frc(1, i) = frc(1,i)+bias_frc(1, i)
++  !   frc(2, i) = frc(2,i)+bias_frc(2, i)
++  !   frc(3, i) = frc(3,i)+bias_frc(3, i)
++  !end do
+ 
+-  call gpu_upload_frc(frc)
++  call gpu_upload_frc_add(bias_frc)
+   endif
+ endif
+ !--------------------------------
 diff --git src/pmemd/src/nfe_bbmd.F90 src/pmemd/src/nfe_bbmd.F90
 new file mode 100644
 index 0000000..89ed53f
@@ -3772,6 +3806,64 @@ index 98e1d48..d0d7ad6 100644
     call abmd_on_mdstep(trs_x, trs_v)
     v = reshape(trs_v,shape(v))
  
+diff --git src/pmemd/src/pme_force.F90 src/pmemd/src/pme_force.F90
+index 6601405..5a4a040 100644
+--- src/pmemd/src/pme_force.F90
++++ src/pmemd/src/pme_force.F90
+@@ -468,19 +468,19 @@ subroutine pme_force(atm_cnt, crd, frc, img_atm_map, atm_img_map, &
+ !-------------------------------------
+ if (infe.gt.0) then
+   if (nfe_init.eq.1) then
+-  call gpu_download_frc(frc)
++  !call gpu_download_frc(frc)
+   call gpu_download_crd(crd)
+ 
+   bias_frc(:,:) = 0.d0
+   call nfe_on_force(crd,bias_frc)
+ 
+-  do i = 1, atm_cnt
+-     frc(1, i) = frc(1,i)+bias_frc(1, i)
+-     frc(2, i) = frc(2,i)+bias_frc(2, i)
+-     frc(3, i) = frc(3,i)+bias_frc(3, i)
+-  end do
++  !do i = 1, atm_cnt
++     !frc(1, i) = frc(1,i)+bias_frc(1, i)
++     !frc(2, i) = frc(2,i)+bias_frc(2, i)
++     !frc(3, i) = frc(3,i)+bias_frc(3, i)
++  !end do
+ 
+-  call gpu_upload_frc(frc)
++  call gpu_upload_frc_add(bias_frc)
+   endif
+ endif
+ !--------------------------------
+@@ -1487,19 +1487,19 @@ subroutine pme_force(atm_cnt, crd, frc, img_atm_map, atm_img_map, &
+ !-------------------------------------
+ if (infe.gt.0) then
+   if (nfe_init.eq.1) then
+-  call gpu_download_frc(frc)
++  !call gpu_download_frc(frc)
+   call gpu_download_crd(crd)
+ 
+   bias_frc(:,:) = 0.d0
+   call nfe_on_force(crd,bias_frc)
+ 
+-  do i = 1, atm_cnt
+-     frc(1, i) = frc(1,i)+bias_frc(1, i)
+-     frc(2, i) = frc(2,i)+bias_frc(2, i)
+-     frc(3, i) = frc(3,i)+bias_frc(3, i)
+-  end do
++  !do i = 1, atm_cnt
++     !frc(1, i) = frc(1,i)+bias_frc(1, i)
++     !frc(2, i) = frc(2,i)+bias_frc(2, i)
++     !frc(3, i) = frc(3,i)+bias_frc(3, i)
++  !end do
+ 
+-  call gpu_upload_frc(frc)
++  call gpu_upload_frc_add(bias_frc)
+   endif
+ endif
+ !--------------------------------
 diff --git src/pmemd/src/runmd.F90 src/pmemd/src/runmd.F90
 index 8cc69ef..61cc4c9 100644
 --- src/pmemd/src/runmd.F90
